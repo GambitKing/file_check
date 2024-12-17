@@ -1,28 +1,28 @@
 ######################################################################################
 # License: GNU General Public License v.3.0                                          #
-# Day of creation: November 11th, 2024                                               #
+# Day of creation: December 12th, 2024                                               #
 # Author: GambitKing                                                                 #
 #                                                                                    #
-# file_analyzer.py, python tool for file analysis                                    #
+# file_check.py, python tool for file analysis                                       #
 ######################################################################################
 
 import os
-os.environ["PYTHONDONTWRITEBYTECODE"] = "1" # Not working as intended !!!
 import subprocess
 import re
 import hashlib
 
-from ascii_naslovi import logo
+from ascii_title import logo
 print(logo)
 
 email_pattern = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
 url_pattern = r"https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+"
 
 def calculate_file_hash(file_path, hash_type='sha256'):
-    # Calculate and return the hash of a file using the specified algorithm.
+    # Calculate and return the hash of a file using the specified algorithm. 
     if not os.path.isfile(file_path):
         print(f"Error: '{file_path}' is not a valid file.")
         return
+
     try:
         # Create the appropriate hash object
         hash_func = getattr(hashlib, hash_type)()
@@ -37,9 +37,16 @@ def calculate_file_hash(file_path, hash_type='sha256'):
         print(f"Error calculating hash for '{file_path}': {e}")
 
 def run_command(command):
-    # Run a shell command and return the output.
+    #Executes a shell command and captures the output.
     try:
-        result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        result = subprocess.run(
+            command if isinstance(command, list) else command,
+            shell=isinstance(command, str),
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
         return result.stdout
     except subprocess.CalledProcessError as e:
         print(f"Error executing command: {command}\n{e.stderr}")
@@ -49,23 +56,37 @@ def analyze_file(file_path):
     # Analyze the file type using the 'file' command.
     if not os.path.isfile(file_path):
         print(f"Error: '{file_path}' is not a valid file.")
-        return
-    # Use the 'file' command to analyze the file type
-    command = f"file --mime-type -b {file_path}"
+        return None
+    # Use the 'file' command to analyze the file type with --mime-type and -b flags
+    command = ["file", "--mime-type", "-b", file_path]
     file_type = run_command(command)
+
     if file_type:
-        print(f"The file '{file_path}' is of type: {file_type.strip()}")
+        mime_type = file_type.strip()
+        print(f"The file '{file_path}' is of type: {mime_type}")
+        return mime_type
+    else:
+        print(f"Failed to analyze the file '{file_path}'.")
+        return None
 
 def save_hexdump(file_path):
     # Save the hexdump of the file to a new file.
     if not os.path.isfile(file_path):
         print(f"Error: '{file_path}' is not a valid file.")
-        return
+        return None
     base_name = os.path.basename(file_path)
-    new_file = f"{base_name}_hexdump"
-    command = f"xxd {file_path} > {new_file}" if run_command("command -v xxd") else f"hexdump -C {file_path} > {new_file}"
+    new_hexdump_file = f"{base_name}_hexdump.txt"
+
+    if run_command("command -v xxd"):
+        command = f"xxd {file_path} > {new_hexdump_file}"
+        tool_used = "xxd"
+    else:
+        command = f"hexdump -C {file_path} > {new_hexdump_file}"
+        tool_used = "hexdump"
+
     run_command(command)
-    print(f"Hexdump saved to: {new_file}")
+    print(f"Hexdump generated using '{tool_used}' and saved to: {new_hexdump_file}")
+    return new_hexdump_file
 
 def save_strings(file_path):
     # Save the extracted strings of the file to a new file.
@@ -73,37 +94,43 @@ def save_strings(file_path):
         print(f"Error: '{file_path}' is not a valid file.")
         return
     base_name = os.path.basename(file_path)
-    new_file = f"{base_name}_strings"
-    command = f"strings {file_path} > {new_file}"
+    new_strings_file = f"{base_name}_strings.txt"
+
+    command = f"strings {file_path} > {new_strings_file}"
     run_command(command)
-    print(f"Strings saved to: {new_file}")
-    return new_file  # Return the strings file for further processing
+    print(f"Strings extracted and saved to: {new_strings_file}")
+    return new_strings_file
 
 def find_ip_in_string(string):
-    # Find and print an IP address in the given string using a regular expression.
-    pattern = r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b"
+    # Regular expression for IPv4 addresses, ensuring each octet is 0–255
+    pattern = r"\b((?:[0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5])\." \
+              r"(?:[0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5])\." \
+              r"(?:[0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5])\." \
+              r"(?:[0-9]{1,2}|1[0-9]{2}|2[0-4][0-9]|25[0-5]))\b"
+    
+    # Find all the IP
     match = re.findall(pattern, string)
-    if match:
-        return match
-    else:
-        return []
+    return match
 
 def search_ip_in_file(file_path):
     # Search for an IP address within a file's content.
-    if not os.path.isfile(file_path):
+    if not file_path or not os.path.isfile(file_path):
         print(f"Error: '{file_path}' is not a valid file.")
         return
-    
-    with open(file_path, 'r') as file:
-        content = file.read()
-        ip_list = find_ip_in_string(content)
-        filtered_ip_list = [ip for ip in ip_list if ip != "1.0.0.0"]
 
-        if filtered_ip_list:
-            print("\nAll IP addresses found:")
-            print(filtered_ip_list)
-        else:
-            print("No IP addresses found.")
+    try:
+        with open(file_path, 'r') as file:
+            content = file.read()
+            ip_list = find_ip_in_string(content)
+            filtered_ip_list = [ip for ip in ip_list if sum(1 for octet in ip.split('.') if octet == '0') < 2]
+
+            if filtered_ip_list:
+                print("\nAll IP addresses found:")
+                print(filtered_ip_list)
+            else:
+                print("No IP addresses found.")
+    except Exception as e:
+        print(f"Error reading the file '{file_path}': (e)")
 
 def search_pattern_in_file(file_path, pattern, description="pattern"):
     # Search for a specific pattern within a file's content and print matches.
@@ -125,21 +152,28 @@ def search_pattern_in_file(file_path, pattern, description="pattern"):
     except Exception as e:
         print(f"Error reading the file '{file_path}': {e}")
 
-def use_all_methods(file_path):
+def use_all_methods(file_path, hash_type):
     # Use all methods: analyze file, generate hexdump, extract strings, and search for IPs in strings.
+    print("Analyzing file type...")
     analyze_file(file_path)
+    print("Saving hexdump...")
     save_hexdump(file_path)
+    print("Saving strings...")
+
     strings_file = save_strings(file_path)
+    if not strings_file or not os.path.isfile(strings_file):
+        print("Error: Failed to generate the strings file. Skipping further analysis.")
+        return
+    else:
+        print(f"Strings saved to: {strings_file}")
 
     # Now search for IP addresses in the extracted strings file
     print("\nSearching for IP addresses in the extracted strings file...")
     search_ip_in_file(strings_file)
-
     # Search for Emails
     search_pattern_in_file(strings_file, email_pattern, description="email address")
     # Search for URLs
     search_pattern_in_file(strings_file, url_pattern, description="URL")
-
     # Calculate the hash
     calculate_file_hash(file_path, hash_type)
 
@@ -172,12 +206,11 @@ if __name__ == "__main__":
         save_strings(file_path)
     elif choice == '4':
         analyze_file(file_path)
-        print(" ")
         save_hexdump(file_path)
         save_strings(file_path)
     elif choice == '5':
         search_ip_in_file(file_path)
     elif choice == '6':
-        use_all_methods(file_path)
+        use_all_methods(file_path, hash_type)
     else:
         print("Invalid choice. Please choose a valid option.")
