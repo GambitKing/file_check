@@ -1,8 +1,7 @@
 ######################################################################################
 # License: GNU General Public License v.3.0                                          #
 # Day of creation: December 12th, 2024                                               #
-# Author: GambitKing                                                                 #
-#                                                                                    #
+# Author: GambitKing                                                                 #                                                                                #
 # file_check.py, python tool for file analysis                                       #
 ######################################################################################
 
@@ -178,7 +177,6 @@ def use_all_methods(file_path, hash_type):
     calculate_file_hash(file_path, hash_type)
 
 def menu():
-    # Display a menu for the user to choose an option.
     print("\nChoose an option:")
     print("1. View file type")
     print("2. Save hexdump to a new file")
